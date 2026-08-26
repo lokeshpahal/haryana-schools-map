@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Haryana Schools Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #273449;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #2dd4bf;
+    --accent-dark: #14b8a6;
+    --chip: #334155;
+    --regular: #34d399;
+    --guest: #fbbf24;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  @supports (height: 100dvh) { body { height: 100dvh; } }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    background: var(--panel);
+    padding: 10px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 18px;
+    border-bottom: 1px solid #334155;
+    z-index: 1100;
+  }
+  header h1 { font-size: 17px; font-weight: 700; white-space: nowrap; }
+  header h1 span { color: var(--accent); }
+  .stats { display: flex; gap: 14px; flex-wrap: wrap; }
+  .stat { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .stat b { color: var(--text); font-size: 14px; margin-right: 3px; }
+  .controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-left: auto;
+  }
+  .controls input, .controls select {
+    background: var(--panel-2);
+    border: 1px solid #3e4c63;
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 13px;
+    outline: none;
+  }
+  .controls input { width: 230px; }
+  .controls input:focus, .controls select:focus { border-color: var(--accent); }
+  #shown-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  #map-wrap { flex: 1; position: relative; display: flex; min-height: 0; }
+  #map { flex: 1; background: #0b1120; }
+  #nearby-panel {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1050;
+    width: 320px;
+    max-width: calc(100% - 20px);
+    background: var(--panel);
+    border: 1px solid #3e4c63;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    font-size: 13px;
+    overflow: hidden;
+  }
+  #nearby-toggle {
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--text);
+    font: inherit;
+    font-weight: 700;
+    padding: 10px 12px;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #nearby-toggle .chev { color: var(--muted); transition: transform .15s; }
+  #nearby-panel.open #nearby-toggle .chev { transform: rotate(180deg); }
+  .np-body { display: none; padding: 0 12px 12px; }
+  #nearby-panel.open .np-body { display: block; }
+  .np-row { display: flex; gap: 6px; margin-bottom: 6px; }
+  .np-row input {
+    flex: 1;
+    min-width: 0;
+    background: var(--panel-2);
+    border: 1px solid #3e4c63;
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 13px;
+    outline: none;
+  }
+  .np-row input:focus { border-color: var(--accent); }
+  .np-row button, .np-actions button {
+    background: var(--panel-2);
+    border: 1px solid #3e4c63;
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .np-row button:hover, .np-actions button:hover { border-color: var(--accent); color: var(--accent); }
+  #np-go { background: var(--accent-dark); border-color: var(--accent-dark); color: #0f172a; font-weight: 700; }
+  .np-count-row { align-items: center; font-size: 12px; color: var(--muted); }
+  .np-count-row select {
+    background: var(--panel-2);
+    border: 1px solid #3e4c63;
+    color: var(--text);
+    border-radius: 8px;
+    padding: 5px 8px;
+    font-size: 12px;
+    outline: none;
+  }
+  .np-count-row select:focus { border-color: var(--accent); }
+  #np-status { font-size: 12px; color: var(--muted); margin: 6px 0; min-height: 15px; }
+  #np-status b { color: var(--accent); }
+  #np-results { max-height: 38vh; overflow-y: auto; }
+  .np-item {
+    padding: 8px 9px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .np-item:hover { background: var(--panel-2); }
+  .np-item.active { background: var(--panel-2); outline: 1px solid var(--accent); }
+  .np-item .np-name { flex: 1; font-size: 12px; line-height: 1.35; }
+  .np-item .np-name small { color: var(--muted); display: block; }
+  .np-item .np-dist { font-size: 12px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+  .np-item .np-cs { color: #f59e0b; font-size: 10px; font-weight: 700; }
+  .origin-pin { font-size: 30px; line-height: 30px; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+  @media (max-width: 640px) {
+    #nearby-panel { top: 6px; right: 6px; left: 6px; width: auto; }
+    .np-row input, .np-row button { font-size: 16px; }
+    #np-results { max-height: 30vh; }
+  }
+  .search-wrap { position: relative; }
+  #search-results {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: 340px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: var(--panel);
+    border: 1px solid #3e4c63;
+    border-radius: 8px;
+    display: none;
+    z-index: 1200;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  }
+  #search-results .item { padding: 8px 12px; cursor: pointer; font-size: 13px; }
+  #search-results .item:hover { background: var(--panel-2); }
+  #search-results .item small { color: var(--muted); display: block; }
+
+  /* Leaflet dark-friendly popups */
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: 0 8px 24px rgba(0,0,0,.55);
+  }
+  .leaflet-popup-content { margin: 14px 16px; min-width: 280px; max-width: 340px; max-height: 55vh; overflow-y: auto; }
+  .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+  .popup h3 { font-size: 14px; line-height: 1.35; margin-bottom: 6px; padding-right: 8px; }
+  .popup .meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .popup .meta b { color: var(--accent); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+  .chip {
+    background: var(--chip);
+    border-radius: 999px;
+    padding: 2px 9px;
+    font-size: 11px;
+    color: var(--text);
+  }
+  .chip.cs {
+    background: rgba(245,158,11,.18);
+    color: #fbbf24;
+    border: 1px solid rgba(245,158,11,.55);
+    font-weight: 700;
+  }
+  .map-legend {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid #3e4c63;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.9;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4);
+  }
+  .map-legend .dot {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 1.5px solid #0f172a;
+    margin-right: 7px;
+    vertical-align: -1px;
+  }
+  .teachers { border-top: 1px solid #334155; padding-top: 8px; }
+  .teachers h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 6px; }
+  .teachers .loading { font-size: 12px; color: var(--muted); }
+  .tgroup { margin-bottom: 7px; }
+  .tgroup .subj { font-size: 12px; font-weight: 700; color: var(--accent); }
+  .tgroup ul { list-style: none; margin-top: 2px; }
+  .tgroup li { font-size: 12px; padding: 1px 0 1px 10px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .badge { font-size: 10px; border-radius: 4px; padding: 0 5px; line-height: 15px; }
+  .badge.regular { background: rgba(52,211,153,.15); color: var(--regular); }
+  .badge.guest { background: rgba(251,191,36,.15); color: var(--guest); }
+  .badge.role { background: var(--chip); color: var(--muted); }
+  .approx-note { font-size: 10px; color: var(--muted); font-style: italic; margin-bottom: 8px; }
+  footer {
+    background: var(--panel);
+    border-top: 1px solid #334155;
+    padding: 5px 16px;
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .leaflet-tooltip.school-tip {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid #3e4c63;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4);
+    font-size: 12px;
+    max-width: 280px;
+    white-space: normal;
+  }
+  .leaflet-tooltip.school-tip::before { display: none; }
+  .school-tip small { color: var(--muted); }
+  .marker-cluster div { color: #0f172a; font-weight: 700; }
+  .marker-cluster-small { background: rgba(45,212,191,.35); }
+  .marker-cluster-small div { background: rgba(45,212,191,.85); }
+  .marker-cluster-medium { background: rgba(56,189,248,.35); }
+  .marker-cluster-medium div { background: rgba(56,189,248,.85); }
+  .marker-cluster-large { background: rgba(251,191,36,.35); }
+  .marker-cluster-large div { background: rgba(251,191,36,.85); }
+  #error-banner {
+    display: none;
+    background: #7f1d1d;
+    color: #fecaca;
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+  @media (max-width: 780px) {
+    .controls { margin-left: 0; width: 100%; }
+    .controls input { flex: 1; width: auto; }
+    #search-results { width: 100%; }
+  }
+  .note-short { display: none; }
+  @media (max-width: 640px) {
+    header { padding: 8px 10px; gap: 5px 10px; }
+    header h1 { font-size: 15px; }
+    .stats { gap: 10px; }
+    .stat { font-size: 10px; }
+    .stat b { font-size: 12px; }
+    .controls { gap: 6px; }
+    .search-wrap { width: 100%; }
+    /* 16px stops iOS Safari from auto-zooming focused inputs */
+    .controls input, .controls select { font-size: 16px; padding: 8px 10px; }
+    .controls input { width: 100%; }
+    .controls select { flex: 1 1 0; min-width: 0; }
+    #shown-count { flex-basis: 100%; text-align: right; font-size: 10.5px; }
+    #search-results { max-height: 45vh; }
+    #search-results .item { padding: 11px 12px; }
+    .leaflet-popup-content {
+      min-width: 220px;
+      max-width: calc(100vw - 64px);
+      max-height: 48vh;
+      margin: 12px 12px;
+    }
+    .leaflet-container a.leaflet-popup-close-button {
+      font-size: 22px;
+      width: 30px;
+      height: 30px;
+    }
+    .map-legend { font-size: 11px; padding: 6px 9px; line-height: 1.7; }
+    footer { padding: 4px 10px; font-size: 10px; gap: 4px 10px; }
+    .note-full { display: none; }
+    .note-short { display: inline; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Haryana <span>Schools Map</span></h1>
+  <div class="stats" id="stats"></div>
+  <div class="controls">
+    <div class="search-wrap">
+      <input type="text" id="search" placeholder="Search school name or code…" autocomplete="off">
+      <div id="search-results"></div>
+    </div>
+    <select id="district-filter"><option value="">All districts</option></select>
+    <select id="subject-filter"><option value="">All subjects</option></select>
+    <span id="shown-count"></span>
+  </div>
+</header>
+<div id="error-banner"></div>
+<div id="map-wrap">
+  <div id="map"></div>
+  <div id="nearby-panel">
+    <button id="nearby-toggle">📍 Nearby schools <span class="chev">▾</span></button>
+    <div class="np-body">
+      <div class="np-row">
+        <input type="text" id="np-address" placeholder="Enter address, village or landmark…" autocomplete="off">
+        <button id="np-go">Find</button>
+      </div>
+      <div class="np-row np-actions">
+        <button id="np-loc">📡 My location</button>
+        <button id="np-pick">🎯 Pick on map</button>
+        <button id="np-clear">✕ Clear</button>
+      </div>
+      <div class="np-row np-count-row">
+        <label for="np-count">Show nearest</label>
+        <select id="np-count">
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <span>schools</span>
+      </div>
+      <div id="np-status"></div>
+      <div id="np-results"></div>
+    </div>
+  </div>
+</div>
+<footer>
+  <span class="note-full">School positions are approximate — plotted around each district headquarters (source data has no coordinates).</span>
+  <span class="note-short">School positions approximate (district-level)</span>
+  <span id="last-updated"></span>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+const DATA_LOCAL = 'live-data.json';
+const DATA_REMOTE = 'https://ravinderchoudhary.github.io/Haryana-PGT-Directory/api/live-data.json';
+const EMPLOYEES_API = code => `https://ravinderchoudhary.github.io/Haryana-PGT-Directory/api/school-employees/${code}.json`;
+
+// Approximate district headquarters coordinates [lat, lng]
+const DISTRICT_COORDS = {
+  'Ambala':        [30.3782, 76.7767],
+  'Bhiwani':       [28.7930, 76.1335],
+  'Chandigarh':    [30.7333, 76.7794],
+  'Charkhi Dadri': [28.5921, 76.2653],
+  'Faridabad':     [28.4089, 77.3178],
+  'Fatehabad':     [29.5152, 75.4545],
+  'Gurugram':      [28.4595, 77.0266],
+  'Hansi':         [29.1021, 75.9618],
+  'Hisar':         [29.1492, 75.7217],
+  'Jhajjar':       [28.6063, 76.6565],
+  'Jind':          [29.3159, 76.3151],
+  'Kaithal':       [29.8015, 76.3998],
+  'Karnal':        [29.6857, 76.9905],
+  'Kurukshetra':   [29.9695, 76.8783],
+  'Mahendragarh':  [28.0444, 76.1056],
+  'Nuh Mewat':     [28.1070, 77.0010],
+  'Palwal':        [28.1447, 77.3260],
+  'Panchkula':     [30.6942, 76.8606],
+  'Panipat':       [29.3909, 76.9635],
+  'Rewari':        [28.1970, 76.6170],
+  'Rohtak':        [28.8955, 76.6066],
+  'Sirsa':         [29.5321, 75.0318],
+  'Sonipat':       [28.9931, 77.0151],
+  'Yamunanagar':   [30.1290, 77.2674],
+};
+
+const map = L.map('map', { zoomControl: true }).setView([29.2, 76.3], 8);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 18,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+}).addTo(map);
+
+const clusterGroup = L.markerClusterGroup({
+  maxClusterRadius: 46,
+  showCoverageOnHover: false,
+  spiderfyOnMaxZoom: true,
+});
+map.addLayer(clusterGroup);
+
+let allSchools = [];            // flat list with .lat/.lng added
+const employeeCache = new Map(); // school_code -> employees[] | Promise
+
+const IS_TOUCH = window.matchMedia('(pointer: coarse)').matches;
+const CS_SUBJECT = 'Computer Science';
+const CS_COLOR = '#f59e0b';
+const DEFAULT_COLOR = '#2dd4bf';
+const hasCS = school => school.subjects.includes(CS_SUBJECT);
+
+const legend = L.control({ position: 'bottomleft' });
+legend.onAdd = () => {
+  const div = L.DomUtil.create('div', 'map-legend');
+  div.innerHTML = `
+    <div><span class="dot" style="background:${CS_COLOR}"></span>Computer Science Filled</div>
+    <div><span class="dot" style="background:${DEFAULT_COLOR}"></span>Computer Science Vacant</div>`;
+  return div;
+};
+legend.addTo(map);
+
+// Deterministic phyllotaxis scatter of n points around a district centre
+function scatterPositions(center, n) {
+  const GOLDEN = 2.399963229728653;
+  const R = Math.min(0.11, 0.02 + 0.008 * Math.sqrt(n)); // degrees (~2–12 km)
+  const latRad = center[0] * Math.PI / 180;
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const r = n === 1 ? 0 : R * Math.sqrt((i + 0.5) / n);
+    const a = i * GOLDEN;
+    pts.push([
+      center[0] + r * Math.cos(a),
+      center[1] + (r * Math.sin(a)) / Math.cos(latRad),
+    ]);
+  }
+  return pts;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// "PGT/Lecturer (History)" -> { role: "PGT/Lecturer", subject: "History" }
+function parseDesignation(designation) {
+  const m = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(designation || '');
+  if (m) return { role: m[1].trim(), subject: m[2].trim() };
+  return { role: (designation || 'Staff').trim(), subject: null };
+}
+
+function teachersHtml(employees) {
+  if (!employees.length) return '<div class="loading">No staff records found.</div>';
+  const groups = new Map(); // key -> {label, items[]}
+  for (const e of employees) {
+    const { role, subject } = parseDesignation(e.designation);
+    const key = subject ? subject : `__${role}`;
+    if (!groups.has(key)) groups.set(key, { label: subject || role, subject: !!subject, items: [] });
+    groups.get(key).items.push({ ...e, role });
+  }
+  const ordered = [...groups.values()].sort((a, b) => {
+    if (a.subject !== b.subject) return a.subject ? 1 : -1; // Principal/HM etc. first
+    return a.label.localeCompare(b.label);
+  });
+  return ordered.map(g => `
+    <div class="tgroup">
+      <div class="subj">${escapeHtml(g.label)} <span style="color:var(--muted);font-weight:400">(${g.items.length})</span></div>
+      <ul>${g.items.map(t => `
+        <li>${escapeHtml(t.name)}
+          ${g.subject ? `<span class="badge role">${escapeHtml(t.role)}</span>` : ''}
+          <span class="badge ${/guest/i.test(t.appointment_type) ? 'guest' : 'regular'}">${escapeHtml(t.appointment_type)}</span>
+        </li>`).join('')}
+      </ul>
+    </div>`).join('');
+}
+
+function loadTeachers(school) {
+  let cached = employeeCache.get(school.school_code);
+  if (!cached) {
+    cached = fetch(EMPLOYEES_API(school.school_code))
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(list => { employeeCache.set(school.school_code, list); return list; })
+      .catch(err => { employeeCache.delete(school.school_code); throw err; });
+    employeeCache.set(school.school_code, cached);
+  }
+  // setContent (not update()) so the loaded list isn't wiped by the content
+  // function re-running; it also re-measures and auto-pans the grown popup.
+  const setTeachers = html => {
+    const p = school._marker && school._marker.getPopup();
+    if (p) p.setContent(popupHtml(school, html));
+  };
+  Promise.resolve(cached)
+    .then(list => setTeachers(teachersHtml(list)))
+    .catch(() => setTeachers('<div class="loading">Could not load teachers (network error).</div>'));
+}
+
+function locationNote(school) {
+  if (school.precision === 'school') return 'Location: mapped school position (OpenStreetMap)';
+  if (school.precision === 'village') return `Location: village centre — ${escapeHtml(school.place || '')}`;
+  return 'Position approximate (district-level)';
+}
+
+function popupHtml(school, teachersInner) {
+  return `<div class="popup">
+    <h3>${escapeHtml(school.school_name)}</h3>
+    <div class="meta">Code <b>${escapeHtml(school.school_code)}</b> · ${escapeHtml(school.district)} district</div>
+    <div class="approx-note">${locationNote(school)}</div>
+    <div class="chips">${school.subjects.map(s => `<span class="chip${s === CS_SUBJECT ? ' cs' : ''}">${escapeHtml(s)}</span>`).join('')}</div>
+    <div class="teachers">
+      <h4>Teachers</h4>
+      <div class="tlist">${teachersInner || '<div class="loading">Loading teachers…</div>'}</div>
+    </div>
+  </div>`;
+}
+
+function makeMarker(school) {
+  const cs = hasCS(school);
+  const approx = school.precision === 'district';
+  const m = L.circleMarker([school.lat, school.lng], {
+    radius: (cs ? 8 : 7) + (IS_TOUCH ? 2 : 0),
+    weight: 1.5,
+    color: '#0f172a',
+    fillColor: cs ? CS_COLOR : DEFAULT_COLOR,
+    fillOpacity: approx ? 0.5 : 0.92,
+    dashArray: approx ? '2 3' : null,
+  });
+  // Hover tooltips are useless on touch screens and linger after taps
+  if (!IS_TOUCH) m.bindTooltip(
+    `<b>${escapeHtml(school.school_name)}</b><br>
+     <small>Code ${escapeHtml(school.school_code)} · ${escapeHtml(school.district)}</small><br>
+     <small>${school.subjects.length} subjects: ${escapeHtml(school.subjects.slice(0, 6).join(', '))}${school.subjects.length > 6 ? '…' : ''}</small>
+     ${cs ? `<br><small style="color:${CS_COLOR};font-weight:700">● Computer Science Filled</small>` : ''}
+     ${approx ? '<br><small><i>~ position approximate</i></small>' : ''}`,
+    { className: 'school-tip', direction: 'top', offset: [0, -6], sticky: true }
+  );
+  m.bindPopup(() => popupHtml(school), { autoPan: true });
+  m.on('popupopen', () => loadTeachers(school));
+  school._marker = m;
+  return m;
+}
+
+// ---------- nearby schools / routing ----------
+let currentShown = [];
+let origin = null;              // { lat, lng, label }
+let originMarker = null;
+let routeLine = null;
+let activeRouteCode = null;
+let picking = false;
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const r = Math.PI / 180;
+  const h = Math.sin((lat2 - lat1) * r / 2) ** 2 +
+    Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin((lng2 - lng1) * r / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
+const npStatus = msg => { document.getElementById('np-status').innerHTML = msg; };
+
+// In nearby mode only the nearest-N keep full markers; the rest become faint,
+// non-interactive ghost dots so the shortlist stands out.
+const ghostRenderer = L.canvas({ padding: 0.5 });
+let ghostLayer = null;
+let nearbyCodes = null;         // Set of school_codes in the current nearby list
+
+function syncLayers() {
+  clusterGroup.clearLayers();
+  if (ghostLayer) { map.removeLayer(ghostLayer); ghostLayer = null; }
+  if (origin && nearbyCodes) {
+    const near = currentShown.filter(s => nearbyCodes.has(s.school_code));
+    clusterGroup.addLayers(near.map(s => s._marker || makeMarker(s)));
+    ghostLayer = L.layerGroup(
+      currentShown.filter(s => !nearbyCodes.has(s.school_code)).map(s =>
+        L.circleMarker([s.lat, s.lng], {
+          renderer: ghostRenderer,
+          radius: 3,
+          stroke: false,
+          fillColor: hasCS(s) ? CS_COLOR : DEFAULT_COLOR,
+          fillOpacity: 0.22,
+          interactive: false,
+        }))
+    ).addTo(map);
+  } else {
+    clusterGroup.addLayers(currentShown.map(s => s._marker || makeMarker(s)));
+  }
+}
+
+function clearRoute() {
+  if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+  activeRouteCode = null;
+}
+
+function clearOrigin(skipSync) {
+  clearRoute();
+  if (originMarker) { map.removeLayer(originMarker); originMarker = null; }
+  origin = null;
+  nearbyCodes = null;
+  document.getElementById('np-results').innerHTML = '';
+  npStatus('');
+  if (!skipSync) syncLayers();
+}
+
+function setOrigin(lat, lng, label) {
+  clearOrigin(true);
+  origin = { lat, lng, label };
+  originMarker = L.marker([lat, lng], {
+    icon: L.divIcon({ className: '', html: '<div class="origin-pin">📍</div>', iconSize: [30, 30], iconAnchor: [15, 28] }),
+    zIndexOffset: 1000,
+  }).addTo(map).bindTooltip(escapeHtml(label), { direction: 'top', offset: [0, -26] });
+  renderNearby();
+}
+
+function renderNearby() {
+  if (!origin) return;
+  const pool = currentShown.length ? currentShown : allSchools;
+  const count = parseInt(document.getElementById('np-count').value, 10) || 10;
+  const nearest = pool
+    .map(s => ({ s, km: haversineKm(origin.lat, origin.lng, s.lat, s.lng) }))
+    .sort((a, b) => a.km - b.km)
+    .slice(0, count);
+  nearbyCodes = new Set(nearest.map(n => n.s.school_code));
+  syncLayers();
+  const filtersOn = pool.length !== allSchools.length;
+  npStatus(`From <b>${escapeHtml(origin.label)}</b> — ${nearest.length} nearest${filtersOn ? ' (matching current filters)' : ''}; other schools are dimmed. Click one for the road route.`);
+  const box = document.getElementById('np-results');
+  box.innerHTML = nearest.map(({ s, km }) => `
+    <div class="np-item${s.school_code === activeRouteCode ? ' active' : ''}" data-code="${escapeHtml(s.school_code)}">
+      <div class="np-name">${escapeHtml(s.school_name)}
+        ${hasCS(s) ? '<span class="np-cs">● CS</span>' : ''}
+        <small>${escapeHtml(s.district)}${s.precision === 'district' ? ' · ~approx position' : ''}</small>
+      </div>
+      <div class="np-dist">${km.toFixed(1)} km</div>
+    </div>`).join('');
+  box.querySelectorAll('.np-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const school = allSchools.find(s => s.school_code === el.dataset.code);
+      if (school) routeTo(school);
+    });
+  });
+  if (!routeLine) {
+    const b = L.latLngBounds([[origin.lat, origin.lng], ...nearest.map(n => [n.s.lat, n.s.lng])]);
+    fitWithPanel(b, 13);
+  }
+}
+
+// keep bounds clear of the nearby panel (right side on desktop, top on mobile)
+function fitWithPanel(bounds, maxZoom) {
+  const panelOpen = document.getElementById('nearby-panel').classList.contains('open');
+  const mobile = window.innerWidth <= 640;
+  const opts = { maxZoom: maxZoom || 16 };
+  if (panelOpen && !mobile) {
+    opts.paddingTopLeft = L.point(50, 50);
+    opts.paddingBottomRight = L.point(380, 50);
+  } else if (panelOpen && mobile) {
+    opts.paddingTopLeft = L.point(40, Math.min(360, window.innerHeight * 0.45));
+    opts.paddingBottomRight = L.point(40, 40);
+  } else {
+    opts.paddingTopLeft = L.point(50, 50);
+    opts.paddingBottomRight = L.point(50, 50);
+  }
+  map.fitBounds(bounds, opts);
+}
+
+async function routeTo(school) {
+  if (!origin) return;
+  clearRoute();
+  activeRouteCode = school.school_code;
+  renderNearby();
+  const straight = haversineKm(origin.lat, origin.lng, school.lat, school.lng);
+  npStatus(`Routing to <b>${escapeHtml(school.school_name)}</b>…`);
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${school.lng},${school.lat}?overview=full&geometries=geojson`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    if (!j.routes || !j.routes.length) throw new Error('no route');
+    const route = j.routes[0];
+    routeLine = L.geoJSON(route.geometry, {
+      style: { color: '#818cf8', weight: 5, opacity: 0.85 },
+    }).addTo(map);
+    const mins = Math.round(route.duration / 60);
+    npStatus(`<b>${(route.distance / 1000).toFixed(1)} km</b> by road · ~<b>${mins} min</b> drive ` +
+      `<span style="color:var(--muted)">(${straight.toFixed(1)} km straight line)</span>`);
+  } catch {
+    routeLine = L.polyline([[origin.lat, origin.lng], [school.lat, school.lng]], {
+      color: '#818cf8', weight: 4, opacity: 0.8, dashArray: '8 8',
+    }).addTo(map);
+    npStatus(`Road routing unavailable — straight-line distance <b>${straight.toFixed(1)} km</b>.`);
+  }
+  fitWithPanel(routeLine.getBounds());
+}
+
+async function geocodeAddress(q) {
+  npStatus('Searching address…');
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=in' +
+      '&viewbox=74.4,31.1,77.7,27.5&q=' + encodeURIComponent(q);
+    const r = await fetch(url);
+    const res = await r.json();
+    if (!res.length) { npStatus('Address not found — try adding the district or “Haryana”.'); return; }
+    setOrigin(parseFloat(res[0].lat), parseFloat(res[0].lon), res[0].display_name.split(',').slice(0, 3).join(','));
+  } catch {
+    npStatus('Address lookup failed (network error).');
+  }
+}
+
+function applyFilters() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const district = document.getElementById('district-filter').value;
+  const subject = document.getElementById('subject-filter').value;
+  const shown = allSchools.filter(s =>
+    (!district || s.district === district) &&
+    (!subject || s.subjects.includes(subject)) &&
+    (!q || s.school_name.toLowerCase().includes(q) || s.school_code.includes(q))
+  );
+  document.getElementById('shown-count').textContent =
+    `${shown.length.toLocaleString()} / ${allSchools.length.toLocaleString()} schools`;
+  currentShown = shown;
+  if (origin) {
+    clearRoute();
+    renderNearby();             // recomputes nearbyCodes and calls syncLayers()
+  } else {
+    syncLayers();
+  }
+  return shown;
+}
+
+function renderSearchResults() {
+  const box = document.getElementById('search-results');
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  if (q.length < 2) { box.style.display = 'none'; return; }
+  const matches = allSchools
+    .filter(s => s.school_name.toLowerCase().includes(q) || s.school_code.includes(q))
+    .slice(0, 12);
+  box.innerHTML = matches.length
+    ? matches.map((s, i) => `<div class="item" data-code="${escapeHtml(s.school_code)}">
+        ${escapeHtml(s.school_name)}<small>Code ${escapeHtml(s.school_code)} · ${escapeHtml(s.district)}</small>
+      </div>`).join('')
+    : '<div class="item">No matches</div>';
+  box.style.display = 'block';
+  box.querySelectorAll('.item[data-code]').forEach(el => {
+    el.addEventListener('click', () => {
+      const school = allSchools.find(s => s.school_code === el.dataset.code);
+      if (!school) return;
+      box.style.display = 'none';
+      focusSchool(school);
+    });
+  });
+}
+
+function focusSchool(school) {
+  // Clear filters that would hide it, keep search text
+  document.getElementById('district-filter').value = '';
+  document.getElementById('subject-filter').value = '';
+  document.getElementById('search').value = '';
+  applyFilters();
+  map.flyTo([school.lat, school.lng], 14, { duration: 0.8 });
+  map.once('moveend', () => {
+    const m = school._marker;
+    if (m) setTimeout(() => m.openPopup(), 200);
+  });
+}
+
+async function loadData() {
+  let data;
+  try {
+    const r = await fetch(DATA_LOCAL);
+    if (!r.ok) throw new Error(r.status);
+    data = await r.json();
+  } catch {
+    const r = await fetch(DATA_REMOTE);
+    if (!r.ok) throw new Error('Could not load school data');
+    data = await r.json();
+  }
+  return data;
+}
+
+// school_code -> [lat, lng, precision, place]; empty map if the file is absent
+async function loadCoords() {
+  try {
+    const r = await fetch('school-coords.json');
+    return r.ok ? await r.json() : {};
+  } catch { return {}; }
+}
+
+// ~150 m deterministic offset so schools sharing one village centre don't stack
+function jitter(code) {
+  let h = 0;
+  for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const a = (h % 360) * Math.PI / 180;
+  const r = 0.0008 + (h % 97) / 97 * 0.0008;
+  return [r * Math.cos(a), r * Math.sin(a)];
+}
+
+Promise.all([loadData(), loadCoords()]).then(([data, coordsMap]) => {
+  const subjects = new Set();
+  let located = 0;
+  for (const [district, schools] of Object.entries(data.districts)) {
+    const center = DISTRICT_COORDS[district];
+    if (!center) { console.warn('No coordinates for district:', district); continue; }
+    const missing = schools.filter(s => !coordsMap[s.school_code]);
+    const pts = scatterPositions(center, missing.length);
+    let mi = 0;
+    schools.forEach(s => {
+      const c = coordsMap[s.school_code];
+      if (c) {
+        const j = c[2] === 'school' ? [0, 0] : jitter(s.school_code);
+        s.lat = c[0] + j[0];
+        s.lng = c[1] + j[1];
+        s.precision = c[2];
+        s.place = c[3];
+        located++;
+      } else {
+        s.lat = pts[mi][0];
+        s.lng = pts[mi][1];
+        mi++;
+        s.precision = 'district';
+      }
+      s.subjects.forEach(x => subjects.add(x));
+      allSchools.push(s);
+    });
+  }
+  document.querySelector('.note-full').textContent =
+    `${located.toLocaleString()} of ${allSchools.length.toLocaleString()} schools at real (school/village-level) positions; the rest are plotted near their district HQ.`;
+  document.querySelector('.note-short').textContent =
+    `${located.toLocaleString()}/${allSchools.length.toLocaleString()} schools at real positions`;
+
+  // Stats header
+  document.getElementById('stats').innerHTML = `
+    <span class="stat"><b>${data.stats.total_schools.toLocaleString()}</b> schools</span>
+    <span class="stat"><b>${data.stats.total_districts}</b> districts</span>
+    <span class="stat"><b>${data.stats.total_employees.toLocaleString()}</b> employees</span>`;
+  document.getElementById('last-updated').textContent =
+    'Data updated: ' + new Date(data.lastUpdated).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  // Filter dropdowns
+  const df = document.getElementById('district-filter');
+  Object.keys(data.districts).sort().forEach(d => df.add(new Option(`${d} (${data.districts[d].length})`, d)));
+  const sf = document.getElementById('subject-filter');
+  [...subjects].sort().forEach(s => sf.add(new Option(s, s)));
+
+  // ---- nearby panel wiring ----
+  const panel = document.getElementById('nearby-panel');
+  L.DomEvent.disableClickPropagation(panel);
+  L.DomEvent.disableScrollPropagation(panel);
+  document.getElementById('nearby-toggle').addEventListener('click', () => panel.classList.toggle('open'));
+  const addrInput = document.getElementById('np-address');
+  const doFind = () => { if (addrInput.value.trim()) geocodeAddress(addrInput.value.trim() + ', Haryana'); };
+  document.getElementById('np-go').addEventListener('click', doFind);
+  addrInput.addEventListener('keydown', e => { if (e.key === 'Enter') doFind(); });
+  document.getElementById('np-clear').addEventListener('click', () => clearOrigin());
+  document.getElementById('np-count').addEventListener('change', () => { if (origin) renderNearby(); });
+  document.getElementById('np-loc').addEventListener('click', () => {
+    if (!navigator.geolocation) { npStatus('Geolocation not supported by this browser.'); return; }
+    npStatus('Getting your location…');
+    navigator.geolocation.getCurrentPosition(
+      p => setOrigin(p.coords.latitude, p.coords.longitude, 'My location'),
+      () => npStatus('Could not get your location — enter an address or pick on the map.'),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
+  document.getElementById('np-pick').addEventListener('click', () => {
+    picking = true;
+    map.getContainer().style.cursor = 'crosshair';
+    npStatus('Click anywhere on the map to set the starting point.');
+  });
+  map.on('click', e => {
+    if (!picking) return;
+    picking = false;
+    map.getContainer().style.cursor = '';
+    setOrigin(e.latlng.lat, e.latlng.lng, `Picked point (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)})`);
+  });
+
+  df.addEventListener('change', () => {
+    applyFilters();
+    if (df.value && DISTRICT_COORDS[df.value]) map.flyTo(DISTRICT_COORDS[df.value], 11, { duration: 0.8 });
+    else map.flyTo([29.2, 76.3], 8, { duration: 0.8 });
+  });
+  sf.addEventListener('change', applyFilters);
+  document.getElementById('search').addEventListener('input', () => { applyFilters(); renderSearchResults(); });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.search-wrap')) document.getElementById('search-results').style.display = 'none';
+  });
+
+  applyFilters();
+}).catch(err => {
+  const banner = document.getElementById('error-banner');
+  banner.textContent = 'Failed to load school data: ' + err.message;
+  banner.style.display = 'block';
+});
+</script>
+</body>
+</html>

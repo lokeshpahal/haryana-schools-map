@@ -254,13 +254,14 @@
   }
   .leaflet-tooltip.school-tip::before { display: none; }
   .school-tip small { color: var(--muted); }
-  .marker-cluster div { color: #0f172a; font-weight: 700; }
-  .marker-cluster-small { background: rgba(45,212,191,.35); }
-  .marker-cluster-small div { background: rgba(45,212,191,.85); }
-  .marker-cluster-medium { background: rgba(56,189,248,.35); }
-  .marker-cluster-medium div { background: rgba(56,189,248,.85); }
-  .marker-cluster-large { background: rgba(251,191,36,.35); }
-  .marker-cluster-large div { background: rgba(251,191,36,.85); }
+  /* blue size-ramp so amber stays reserved for Computer Science markers */
+  .marker-cluster div { color: #fff; font-weight: 700; }
+  .marker-cluster-small { background: rgba(96,165,250,.35); }
+  .marker-cluster-small div { background: rgba(59,130,246,.88); }
+  .marker-cluster-medium { background: rgba(59,130,246,.35); }
+  .marker-cluster-medium div { background: rgba(37,99,235,.9); }
+  .marker-cluster-large { background: rgba(37,99,235,.35); }
+  .marker-cluster-large div { background: rgba(29,78,216,.92); }
   #error-banner {
     display: none;
     background: #7f1d1d;
@@ -412,7 +413,7 @@ const employeeCache = new Map(); // school_code -> employees[] | Promise
 const IS_TOUCH = window.matchMedia('(pointer: coarse)').matches;
 const CS_SUBJECT = 'Computer Science';
 const CS_COLOR = '#f59e0b';
-const DEFAULT_COLOR = '#2dd4bf';
+const DEFAULT_COLOR = '#2563eb';
 const hasCS = school => school.subjects.includes(CS_SUBJECT);
 
 const legend = L.control({ position: 'bottomleft' });

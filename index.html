@@ -574,6 +574,9 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 
 const npStatus = msg => { document.getElementById('np-status').innerHTML = msg; };
 
+// GA event helper — gtag is absent on localhost, so this safely no-ops there
+const track = (name, params) => { if (window.gtag) gtag('event', name, params); };
+
 // In nearby mode only the nearest-N keep full markers; the rest become faint,
 // non-interactive ghost dots so the shortlist stands out.
 const ghostRenderer = L.canvas({ padding: 0.5 });
@@ -698,11 +701,23 @@ async function routeTo(school) {
     const mins = Math.round(route.duration / 60);
     npStatus(`<b>${(route.distance / 1000).toFixed(1)} km</b> by road · ~<b>${mins} min</b> drive ` +
       `<span style="color:var(--muted)">(${straight.toFixed(1)} km straight line)</span>`);
+    track('school_route', {
+      school_code: school.school_code,
+      district: school.district,
+      road_km: +(route.distance / 1000).toFixed(1),
+      routing: 'osrm',
+    });
   } catch {
     routeLine = L.polyline([[origin.lat, origin.lng], [school.lat, school.lng]], {
       color: '#818cf8', weight: 4, opacity: 0.8, dashArray: '8 8',
     }).addTo(map);
     npStatus(`Road routing unavailable — straight-line distance <b>${straight.toFixed(1)} km</b>.`);
+    track('school_route', {
+      school_code: school.school_code,
+      district: school.district,
+      straight_km: +straight.toFixed(1),
+      routing: 'straight_line',
+    });
   }
   fitWithPanel(routeLine.getBounds());
 }
@@ -714,9 +729,12 @@ async function geocodeAddress(q) {
       '&viewbox=74.4,31.1,77.7,27.5&q=' + encodeURIComponent(q);
     const r = await fetch(url);
     const res = await r.json();
+    // note: the typed address itself is never sent to analytics (may be a home address)
+    track('address_search', { found: res.length > 0 });
     if (!res.length) { npStatus('Address not found — try adding the district or “Haryana”.'); return; }
     setOrigin(parseFloat(res[0].lat), parseFloat(res[0].lon), res[0].display_name.split(',').slice(0, 3).join(','));
   } catch {
+    track('address_search', { found: false, error: true });
     npStatus('Address lookup failed (network error).');
   }
 }
